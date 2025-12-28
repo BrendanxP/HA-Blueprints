@@ -1,0 +1,54 @@
+blueprint:
+  name: LLM Script for Lights voice requests
+  description: |
+    This script controls lights based on voice requests. Use for ALL light commands.
+    Parameters: action (on/off/toggle), area/floor, brightness (0-100), color_temp (kelvin).
+    
+    Examples:
+    - "all lights living on" → action="on", area="Living"
+    - "dim bedroom 50%" → action="on", area="Bedroom", brightness=50
+    - "warm upstairs" → action="on", area="Upstairs", color_temp=2700
+    
+    Use this script for ANY light request.
+
+input:
+  prompt_settings:
+    name: LLM Prompts
+    input:
+      action_prompt:
+        name: Action Prompt
+        default: '"action" is "on", "off", or "toggle". Mandatory.'
+      area_prompt:
+        name: Area Prompt
+        default: 'Area/floor from request or device location. Examples: "Living", "Upstairs", "Downstairs", "Gaming".'
+      brightness_prompt:
+        name: Brightness Prompt
+        default: 'Brightness 0-100%. Use percentages or "dim/half/full".'
+      color_temp_prompt:
+        name: Color Temp Prompt
+        default: '"warm"=2700K, "cool"=6500K, kelvin values. Optional.'
+
+fields:
+  action:
+    selector: select
+    options: [on, off, toggle]
+    required: true
+  area:
+    selector: area
+    multiple: true
+  brightness:
+    selector: number
+    min: 0
+    max: 100
+  color_temp:
+    selector: number
+    min: 2000
+    max: 6500
+
+sequence:
+- service: "{{ 'light.turn_' ~ action }}"
+  target:
+    area_id: "{{ area | default([]) }}"
+  data:
+    brightness_pct: "{{ brightness | default(omit) }}"
+    color_temp_kelvin: "{{ color_temp | default(omit) }}"
