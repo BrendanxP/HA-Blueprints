@@ -48,7 +48,7 @@ blueprint:
         action_prompt:
           name: Action Prompt
           default: |
-            **MANDATORY** "action" = "on", "off", or "toggle". Never empty!
+            **MANDATORY** "action" = "turn_on", "turn_off", or "toggle". Never empty!
         target_type_prompt:
           name: Target Type Prompt  
           default: |
@@ -60,8 +60,8 @@ blueprint:
         target_name_prompt:
           name: Target Name Prompt
           default: |
-            Exact HA name from live context. Dynamic lookup - no fixed list needed.
-            Examples: "Desk Brendan", "Living", "Upstairs", "Gaming, Office", "Nanoleaf Triangles"
+            Exact HA name from live context. Dynamic lookup from the provided list. Adjust fuzzy-tolerant where needed!
+            Examples: 1. entities: "Living Ceiling", "Nanoleaf Triangles"; 2. areas: "Bedroom", "Gaming"; 3. floors "Upstairs", "Downstairs". 
         brightness_prompt:
           name: Brightness Prompt **PRIORITY**
           default: |
@@ -75,7 +75,7 @@ fields:
   action:
     selector:
       select:
-        options: [on, off, toggle]
+        options: [turn_on, turn_off, toggle]
     name: Action
     description: !input action_prompt
     required: true
@@ -116,7 +116,7 @@ sequence:
       {% else %}
         {{ {'floor_id': target_name} }}
       {% endif %}
-- service: "light.turn_{{ action }}"
+- service: "light.{{ action }}"
   target: "{{ target_map }}"
   data:
     brightness_pct: "{{ brightness_pct | default(omit) }}"
