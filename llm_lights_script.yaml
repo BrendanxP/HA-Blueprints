@@ -2,8 +2,12 @@ blueprint:
   name: LLM Script for Lights voice requests
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml
   description: |
-    ![Lightbulb](https://raw.githubusercontent.com/music-assistant/voice-support/main/assets/music-assistant.png)
-    
+  
+    # Example description:
+    # This script controls ALL lights dynamically. Parameters: action (on/off/toggle), target_type (entity/area/floor), target_name (exact HA name), brightness_pct (0-100), rgb_color ([R,G,B]). 
+
+**MANDATORY**: target_type separates single lights vs areas/floors. Use for ANY light request!
+
     # LLM Lights Control - Dynamic areas/floors/entities
     
     **Use this script for ALL light requests.** Handles single lights, areas, floors dynamically.
