@@ -5,7 +5,7 @@ blueprint:
     # LLM Lights Control - Dynamic areas/floors/entities
     
     **Use this script for ALL light requests.** Handles single lights, areas, floors dynamically.
-    **MANDATORY**: target_type separates single lights vs areas/floors. Use for ANY light request!
+    **MANDATORY**; target_type separates single lights vs areas/floors. Use for ANY light request!
     
     ## Parameters (LLM fills automatically):
     | Parameter | Description |
