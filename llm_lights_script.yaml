@@ -13,7 +13,7 @@ blueprint:
     | `action` | "on", "off", "toggle" - **MANDATORY** |
     | `target_type` | "entity" (single light), "area", "floor" - **MANDATORY** |
     | `target_name` | Exact entity/area/floor name from HA |
-    | `brightness_pct` | 0-100% - **PRIORITY** ("dim"=30, "half"=50, "full"=100) |
+    | `brightness_pct` | 0-100% - ("dim"=30, "half"=50, "full"=100) |
     | `rgb_color` | [R,G,B] values 0-255 - RGB lights |
     
     ## Examples:
@@ -68,7 +68,7 @@ blueprint:
         brightness_prompt:
           name: Brightness Prompt **PRIORITY**
           default: |
-            **PRIORITY** brightness_pct 0-100. Parse: "50%"=50, "half"=50, "dim"=30, "full"=100, "bright"=80
+            brightness_pct 0-100. Parse: "50%"=50, "half"=50, "dim"=30, "full"=100, "bright"=80
         rgb_prompt:
           name: RGB Prompt
           default: |
