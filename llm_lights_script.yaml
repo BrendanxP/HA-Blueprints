@@ -3,9 +3,6 @@ blueprint:
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml
   description: |
   
-    # Example description:
-    # This script controls ALL lights dynamically. Parameters: action (on/off/toggle), target_type (entity/area/floor), target_name (exact HA name), brightness_pct (0-100), rgb_color ([R,G,B]). 
-
 **MANDATORY**: target_type separates single lights vs areas/floors. Use for ANY light request!
 
     # LLM Lights Control - Dynamic areas/floors/entities
@@ -26,8 +23,12 @@ blueprint:
     - "All lights Living off" → `action=off, target_type=area, target_name="Living"`
     - "Upstairs lights dim" → `action=on, target_type=floor, target_name="Upstairs", brightness_pct=30`
     - "Nanoleaf red" → `action=on, target_type=entity, target_name="Nanoleaf Triangles", rgb_color=[255,0,0]`
+
+    ## Example description:
+    This script controls ALL lights dynamically. Parameters: action (turn_on/turn_off/toggle), target_type (entity/area/floor), target_name (exact HA name), brightness_pct (0-100), rgb_color ([R,G,B]). 
+
     
-    **CRITICAL**: Use `target_type` to separate entity vs area/floor. Never mix!
+    **CRITICAL**: Use `target_type` to separate entity vs area vs floor. Never mix!
   domain: script
   author: Adapted from Music Assistant LLM blueprint
   homeassistant:
@@ -58,8 +59,8 @@ blueprint:
           default: |
             **MANDATORY** "target_type" = "entity" (single light like "Desk Brendan"), "area" ("Living"), or "floor" ("Upstairs").
             - Use "entity" for specific lights ONLY
-            - Use "area" for room lights ("Living", "Bedroom")  
-            - Use "floor" for upstairs/downstairs
+            - Use "area" for "all" lights in a room ("Living", "Bedroom")  
+            - Use "floor" for "all" lights on a floor ("Upstairs", "Downstairs")
             **NEVER mix entity+area/floor in same call**
         target_name_prompt:
           name: Target Name Prompt
