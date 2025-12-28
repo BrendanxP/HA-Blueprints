@@ -25,7 +25,7 @@ blueprint:
     - "Nanoleaf red" → `action=on, target_type=entity, target_name="Nanoleaf Triangles", rgb_color=[255,0,0]`
 
     ## Example description:
-    This script controls ALL lights dynamically. Parameters: action (turn_on/turn_off/toggle), target_type (entity/area/floor), target_name (exact HA name), brightness_pct (0-100), rgb_color ([R,G,B]). 
+    This script controls ALL lights dynamically. Parameters; action (turn_on/turn_off/toggle), target_type (entity/area/floor), target_name (exact HA name), brightness_pct (0-100), rgb_color ([R,G,B]). 
 
     
     **CRITICAL**: Use `target_type` to separate entity vs area vs floor. Never mix!
