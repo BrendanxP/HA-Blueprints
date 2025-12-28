@@ -2,67 +2,96 @@ blueprint:
   name: LLM Script for Lights voice requests
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml
   description: |
-    This script controls ALL lights via voice. Use for ANY light request.
+    ![Lightbulb](https://raw.githubusercontent.com/music-assistant/voice-support/main/assets/music-assistant.png)
     
-    Parameters: action (on/off/toggle), area, brightness_pct (0-100), color_temp_kelvin (2000-6500).
+    # LLM Lights Control - Dynamic areas/floors/entities
     
-    Use this script whenever user says "lights", "turn on/off", "dim", etc.
+    **Use this script for ALL light requests.** Handles single lights, areas, floors dynamically.
     
-    Examples:
-    - "all lights living on" → action="on", area="Living"
-    - "dim gaming 50" → action="on", area="Gaming, Office", brightness_pct=50
-    - "warm upstairs off" → action="off", area="Upstairs"
+    ## Parameters (LLM fills automatically):
+    | Parameter | Description |
+    |-----------|-------------|
+    | `action` | "on", "off", "toggle" - **MANDATORY** |
+    | `target_type` | "entity" (single light), "area", "floor" - **MANDATORY** |
+    | `target_name` | Exact entity/area/floor name from HA |
+    | `brightness_pct` | 0-100% - **PRIORITY** ("dim"=30, "half"=50, "full"=100) |
+    | `rgb_color` | [R,G,B] values 0-255 - RGB lights |
+    
+    ## Examples:
+    - "Desk Brendan on 50%" → `action=on, target_type=entity, target_name="Desk Brendan", brightness_pct=50`
+    - "All lights Living off" → `action=off, target_type=area, target_name="Living"`
+    - "Upstairs lights dim" → `action=on, target_type=floor, target_name="Upstairs", brightness_pct=30`
+    - "Nanoleaf red" → `action=on, target_type=entity, target_name="Nanoleaf Triangles", rgb_color=[255,0,0]`
+    
+    **CRITICAL**: Use `target_type` to separate entity vs area/floor. Never mix!
   domain: script
-  author: Adapted from Music Assistant
+  author: Adapted from Music Assistant LLM blueprint
   homeassistant:
     min_version: 2024.6.0
   input:
     light_settings:
       name: Light Settings
       icon: mdi:lightbulb
-      description: Configure default light behavior
+      description: Default behavior
       input:
         default_area:
           name: Default Area
-          description: Default area if none specified
+          description: Fallback if no target specified
           selector:
             area: {}
           default: {}
     prompt_settings:
-      name: Prompt settings for LLM
+      name: LLM Prompts (fine-tune Qwen)
       icon: mdi:robot
-      description: Fine-tune prompts for Qwen
       collapsed: true
       input:
         action_prompt:
           name: Action Prompt
-          default: '"action" must be "on", "off", or "toggle". Required for all light requests.'
-        area_prompt:
-          name: Area Prompt
-          default: 'Areas from request: "Living", "Bedroom", "Upstairs", "Downstairs", "Gaming, Office", "Kitchen". Use satellite area if none specified.'
+          default: |
+            **MANDATORY** "action" = "on", "off", or "toggle". Never empty!
+        target_type_prompt:
+          name: Target Type Prompt  
+          default: |
+            **MANDATORY** "target_type" = "entity" (single light like "Desk Brendan"), "area" ("Living"), or "floor" ("Upstairs").
+            - Use "entity" for specific lights ONLY
+            - Use "area" for room lights ("Living", "Bedroom")  
+            - Use "floor" for upstairs/downstairs
+            **NEVER mix entity+area/floor in same call**
+        target_name_prompt:
+          name: Target Name Prompt
+          default: |
+            Exact HA name from live context. Dynamic lookup - no fixed list needed.
+            Examples: "Desk Brendan", "Living", "Upstairs", "Gaming, Office", "Nanoleaf Triangles"
         brightness_prompt:
-          name: Brightness Prompt
-          default: 'brightness_pct: 0-100. "dim"=30, "half"=50, "full"=100, percentages.'
-        color_temp_prompt:
-          name: Color Temp Prompt
-          default: 'color_temp_kelvin: 2000-6500K. "warm"=2700, "cool"=6500.'
+          name: Brightness Prompt **PRIORITY**
+          default: |
+            **PRIORITY** brightness_pct 0-100. Parse: "50%"=50, "half"=50, "dim"=30, "full"=100, "bright"=80
+        rgb_prompt:
+          name: RGB Prompt
+          default: |
+            RGB lights only: rgb_color=[R,G,B] (0-255). "red"=[255,0,0], "blue"=[0,0,255], "purple"=[147,0,255]
 
 fields:
   action:
     selector:
       select:
-        options:
-          - on
-          - off
-          - toggle
+        options: [on, off, toggle]
     name: Action
     description: !input action_prompt
     required: true
-  area:
+  target_type:
     selector:
-      area: {}
-    name: Area
-    description: !input area_prompt
+      select:
+        options: [entity, area, floor]
+    name: Target Type
+    description: !input target_type_prompt
+    required: true
+  target_name:
+    selector:
+      text:
+    name: Target Name
+    description: !input target_name_prompt
+    required: true
   brightness_pct:
     selector:
       number:
@@ -71,24 +100,27 @@ fields:
         step: 1
     name: Brightness (%)
     description: !input brightness_prompt
-  color_temp_kelvin:
+  rgb_color:
     selector:
-      number:
-        min: 2000
-        max: 6500
-        step: 100
-    name: Color Temp (Kelvin)
-    description: !input color_temp_prompt
+      color_rgb: {}
+    name: RGB Color
+    description: !input rgb_prompt
 
 sequence:
 - variables:
-    target_area: "{{ area | default(default_area | default([])) }}"
+    target_map: >
+      {% if target_type == 'entity' %}
+        {{ {'entity_id': target_name} }}
+      {% elif target_type == 'area' %}
+        {{ {'area_id': target_name} }}
+      {% else %}
+        {{ {'floor_id': target_name} }}
+      {% endif %}
 - service: "light.turn_{{ action }}"
-  target:
-    area_id: "{{ target_area }}"
+  target: "{{ target_map }}"
   data:
     brightness_pct: "{{ brightness_pct | default(omit) }}"
-    color_temp_kelvin: "{{ color_temp_kelvin | default(omit) }}"
+    rgb_color: "{{ rgb_color | default(omit) }}"
 
 mode: parallel
 max_exceeded: silent
