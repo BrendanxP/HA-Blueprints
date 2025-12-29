@@ -1,129 +1,71 @@
 blueprint:
-  name: LLM Script for Lights voice requests
-  source_url: https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml
+  name: LLM Complete Lights Control
   description: |
-    # LLM Lights Control - Dynamic areas/floors/entities
+    Complete light control: entity/area/floor + brightness/RGB/temp/effect/transition.
     
-    **Use this script for ALL light requests.** Handles single lights, areas, floors dynamically.
-    **MANDATORY**; target_type separates single lights vs areas/floors. Use for ANY light request!
+    MANDATORY: action + target_type + target_name
+    OPTIONAL (PRIORITY order): brightness_pct > rgb_color > color_temp_kelvin > brightness_step_pct > effect > transition
     
-    ## Parameters (LLM fills automatically):
-    | Parameter | Description |
-    |-----------|-------------|
-    | `action` | "on", "off", "toggle" - **MANDATORY** |
-    | `target_type` | "entity" (single light), "area", "floor" - **MANDATORY** |
-    | `target_name` | Exact entity/area/floor name from HA |
-    | `brightness_pct` | 0-100% - ("dim"=30, "half"=50, "full"=100) |
-    | `rgb_color` | [R,G,B] values 0-255 - RGB lights |
-    
-    ## Examples:
-    - "Desk Brendan on 50%" → `action=on, target_type=entity, target_name="Desk Brendan", brightness_pct=50`
-    - "All lights Living off" → `action=off, target_type=area, target_name="Living"`
-    - "Upstairs lights dim" → `action=on, target_type=floor, target_name="Upstairs", brightness_pct=30`
-    - "Nanoleaf red" → `action=on, target_type=entity, target_name="Nanoleaf Triangles", rgb_color=[255,0,0]`
-
-    ## Example description:
-    This script controls ALL lights dynamically. Parameters; action (turn_on/turn_off/toggle), target_type (entity/area/floor), target_name (exact HA name), brightness_pct (0-100), rgb_color ([R,G,B]). 
-
-    
-    **CRITICAL**: Use `target_type` to separate entity vs area vs floor. Never mix!
+    Use for ALL light requests. Dynamic - no fixed lists.
   domain: script
-  author: Adapted from Music Assistant LLM blueprint
-  homeassistant:
-    min_version: 2024.6.0
   input:
-    light_settings:
-      name: Light Settings
-      icon: mdi:lightbulb
-      description: Default behavior
-      input:
-        default_area:
-          name: Default Area
-          description: Fallback if no target specified
-          selector:
-            area: {}
-          default: {}
     prompt_settings:
-      name: LLM Prompts (fine-tune Qwen)
-      icon: mdi:robot
-      collapsed: true
+      name: LLM Prompts
       input:
         action_prompt:
-          name: Action Prompt
-          default: |
-            **MANDATORY** "action" = "turn_on", "turn_off", or "toggle". Never empty!
+          default: '"action": "turn_on", "turn_off", or "toggle" - ALWAYS REQUIRED'
         target_type_prompt:
-          name: Target Type Prompt  
           default: |
-            **MANDATORY** "target_type" = "entity" (single light like "Desk Brendan"), "area" ("Living"), or "floor" ("Upstairs").
-            - Use "entity" for specific lights ONLY
-            - Use "area" for "all" lights in a room ("Living", "Bedroom")  
-            - Use "floor" for "all" lights on a floor ("Upstairs", "Downstairs")
-            **NEVER mix entity+area/floor in same call**
-        target_name_prompt:
-          name: Target Name Prompt
-          default: |
-            Exact HA name from live context. Dynamic lookup from the provided list. Adjust fuzzy-tolerant where needed!
-            Examples: 1. entities: "Living Ceiling", "Nanoleaf Triangles"; 2. areas: "Bedroom", "Gaming"; 3. floors "Upstairs", "Downstairs". 
+            "target_type": "entity" (single light), "area" (room), "floor" (upstairs).
+            EXCLUSIVE - pick ONE only. Never mix.
         brightness_prompt:
-          name: Brightness Prompt
           default: |
-            brightness_pct 0-100. Parse: "50%"=50, "half"=50, "dim"=30, "full"=100, "bright"=80
-        rgb_prompt:
-          name: RGB Prompt
-          default: |
-            RGB lights only: rgb_color=[R,G,B] (0-255). "red"=[255,0,0], "blue"=[0,0,255], "purple"=[147,0,255]
-
-fields:
-  action:
-    selector:
-      select:
-        options: [turn_on, turn_off, toggle]
-    name: Action
-    description: !input action_prompt
-    required: true
-  target_type:
-    selector:
-      select:
-        options: [entity, area, floor]
-    name: Target Type
-    description: !input target_type_prompt
-    required: true
-  target_name:
-    selector:
-      text:
-    name: Target Name
-    description: !input target_name_prompt
-    required: true
-  brightness_pct:
-    selector:
-      number:
-        min: 0
-        max: 100
-        step: 1
-    name: Brightness (%)
-    description: !input brightness_prompt
-  rgb_color:
-    selector:
-      color_rgb: {}
-    name: RGB Color
-    description: !input rgb_prompt
+            "brightness_pct": 0-100 PRIORITY. "half"=50, "dim"=30, "bright"=80, "+10%"=brightness_step_pct=10
+  fields:
+    action:
+      selector: select
+      options: [turn_on, turn_off, toggle]
+      required: true
+    target_type:
+      selector: select
+      options: [entity, area, floor]
+      required: true
+    target_name:
+      selector: text:
+      required: true
+    brightness_pct:
+      selector: number: {min: 0, max: 100}
+    brightness_step_pct:
+      selector: number: {min: -100, max: 100}
+    rgb_color:
+      selector: text:
+    color_temp_kelvin:
+      selector: number: {min: 2000, max: 6500}
+    effect:
+      selector: text:
+    transition:
+      selector: number: {min: 0, max: 60}
 
 sequence:
 - variables:
-    target_map: >
+    target: >
       {% if target_type == 'entity' %}
-        {{ {'entity_id': target_name} }}
+        entity_id: "{{ target_name }}"
       {% elif target_type == 'area' %}
-        {{ {'area_id': target_name} }}
+        area_id: "{{ target_name }}"
       {% else %}
-        {{ {'floor_id': target_name} }}
+        floor_id: "{{ target_name }}"
       {% endif %}
+    data: >
+      {% set d = {} %}
+      {% if brightness_pct is number and brightness_pct > 0 %}{% set d = d | combine({'brightness_pct': brightness_pct|int}) %}{% endif %}
+      {% if brightness_step_pct is number %}{% set d = d | combine({'brightness_step_pct': brightness_step_pct|int}) %}{% endif %}
+      {% if rgb_color and rgb_color.strip() != '' %}{% set d = d | combine({'rgb_color': rgb_color.split(',')|map('trim')|map('int')|list}) %}{% endif %}
+      {% if color_temp_kelvin is number %}{% set d = d | combine({'color_temp_kelvin': color_temp_kelvin|int}) %}{% endif %}
+      {% if effect and effect.strip() != '' %}{% set d = d | combine({'effect': effect}) %}{% endif %}
+      {% if transition is number %}{% set d = d | combine({'transition': transition}) %}{% endif %}
+      {{ d if d else {} }}
 - service: "light.{{ action }}"
-  target: "{{ target_map }}"
-  data:
-    brightness_pct: "{{ brightness_pct | default(omit) }}"
-    rgb_color: "{{ rgb_color | default(omit) }}"
-
+  target: "{{ target }}"
+  data: "{{ data }}"
 mode: parallel
-max_exceeded: silent
