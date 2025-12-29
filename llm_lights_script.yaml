@@ -246,12 +246,11 @@ sequence:
         {% elif raw_target in ['all', 'everywhere', 'house', 'whole house'] %}
           {% set all_floors = states.floor | map(attribute='entity_id') | list %}
           {% set valid_target = {'floor_id': all_floors} %}
-        {% elif !input default_area %}
-          {% set valid_target = {'area_id': [!input default_area]} %}
         {% else %}
           {{ {} }}
         {% endif %}
         {{ valid_target }}
+
 
       # Service data
       service_data: >
