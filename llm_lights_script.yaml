@@ -190,6 +190,16 @@ sequence:
   - variables:
       raw_target: "{{ target | lower | trim }}"
       raw_action: "{{ action }}"
+
+      brightness_pct_final: >
+        {% set pct = brightness_pct | default(0) | int %}
+        {% if raw_action == 'dim' %}
+          {{ [pct, 40] | max | default(50) }}
+        {% elif raw_action == 'brighten' %}
+          {{ [pct, 70] | min | default(80) }}
+        {% else %}
+          {{ pct }}
+        {% endif %}
       
       # 1. ENTITY fuzzy matching (PRIORITY 1)
       entity_match: >
@@ -232,22 +242,23 @@ sequence:
       
       service_data: >
         {% set data = namespace(dict={}) %}
-        {% if brightness_pct_final > 0 %}
+        {% if brightness_pct_final is defined and brightness_pct_final > 0 %}
           {% set data.dict = data.dict | combine({'brightness_pct': brightness_pct_final}) %}
         {% endif %}
-        {% if color_name and color_name != '' %}
+        {% if color_name is defined and color_name and color_name != '' %}
           {% set data.dict = data.dict | combine({'color_name': color_name}) %}
         {% endif %}
-        {% if rgb_color and rgb_color != '' %}
-          {% set data.dict = data.dict | combine({'rgb_color': rgb_color | from_json | default(rgb_color)}) %}
+        {% if rgb_color is defined and rgb_color and rgb_color != '' %}
+          {% set data.dict = data.dict | combine({'rgb_color': rgb_color}) %}
         {% endif %}
-        {% if color_temp_kelvin and color_temp_kelvin != '' %}
-          {% set data.dict = data.dict | combine({'color_temp_kelvin': color_temp_kelvin | int(0)}) %}
+        {% if color_temp_kelvin is defined and color_temp_kelvin and color_temp_kelvin != 0 %}
+          {% set data.dict = data.dict | combine({'color_temp_kelvin': color_temp_kelvin | int}) %}
         {% endif %}
-        {% if transition and transition != '' %}
-          {% set data.dict = data.dict | combine({'transition': transition | float(0)}) %}
+        {% if transition is defined and transition and transition != 0 %}
+          {% set data.dict = data.dict | combine({'transition': transition | float}) %}
         {% endif %}
         {{ data.dict }}
+
 
 
   # Execute (music blueprint style)
