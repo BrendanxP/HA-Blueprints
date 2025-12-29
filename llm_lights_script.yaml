@@ -231,12 +231,24 @@ sequence:
         {% endif %}
       
       service_data: >
-        {% set data = {} %}
-        {% if brightness_pct | default(0) | int > 0 %}
-          {{ data | combine({'brightness_pct': brightness_pct | int}) }}
-        {% else %}
-          {{ data }}
+        {% set data = namespace(dict={}) %}
+        {% if brightness_pct_final > 0 %}
+          {% set data.dict = data.dict | combine({'brightness_pct': brightness_pct_final}) %}
         {% endif %}
+        {% if color_name and color_name != '' %}
+          {% set data.dict = data.dict | combine({'color_name': color_name}) %}
+        {% endif %}
+        {% if rgb_color and rgb_color != '' %}
+          {% set data.dict = data.dict | combine({'rgb_color': rgb_color | from_json | default(rgb_color)}) %}
+        {% endif %}
+        {% if color_temp_kelvin and color_temp_kelvin != '' %}
+          {% set data.dict = data.dict | combine({'color_temp_kelvin': color_temp_kelvin | int(0)}) %}
+        {% endif %}
+        {% if transition and transition != '' %}
+          {% set data.dict = data.dict | combine({'transition': transition | float(0)}) %}
+        {% endif %}
+        {{ data.dict }}
+
 
   # Execute (music blueprint style)
   - service: "{{ service_name }}"
