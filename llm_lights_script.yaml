@@ -17,23 +17,22 @@ blueprint:
     * It is possible to add additional actions to be performed after the light service calls.
     
     ## Example for script description
-    `This script controls lights based on voice requests. Use for turn on/off, dim/brighten, color changes. Specify target (desk lamp, bedroom, upstairs, all) and parameters (brightness 50%, red, transition 5s). Use this tool for all light control requests.`
+    `This script controls lights based on voice requests. Use for turn on/off, dim/brighten, color changes. Specify target (ceiling light living room, upstairs, bedroom, all) and parameters (brightness 50%, red, transition 5s). Use this tool for all light control requests.`
     
     ## Available variables for additional actions
     |Variable|Description|
     |---|---|
-    |`target`|Raw target from voice request (desk lamp, bedroom, upstairs, all)|
+    |`target`|Raw target from voice request|
     |`action`|The action: turn_on, turn_off, toggle, dim, brighten|
-    |`resolved_target`|Dictionary with resolved area_id/entity_id lists|
-    |`target_data`|Clean target dict passed to service (area_id or entity_id only)|
+    |`target_data`|Clean target dict (entity_id OR floor_id OR area_id only)|
+    |`clean_target`|Final service target used|
     |`brightness_pct`|Brightness percentage 0-100|
-    |`color_name`|Color name (red, blue, etc.)|
 
   input:
     light_settings:
       name: Light Settings
       icon: mdi:lightbulb
-      description: Configure default areas and floors for light control
+      description: Configure default area for light control
       input:
         default_area:
           name: Default Area
@@ -41,20 +40,6 @@ blueprint:
           selector:
             area: {}
           default: {}
-        
-        upstairs_areas:
-          name: Upstairs Areas
-          description: All area IDs on upstairs floor (bedroom, hallway, etc.)
-          selector:
-            area:
-              multiple: true
-        
-        downstairs_areas:
-          name: Downstairs Areas
-          description: All area IDs on downstairs floor (living_room, kitchen, etc.)
-          selector:
-            area:
-              multiple: true
 
     prompt_settings:
       name: Prompt settings for the LLM
@@ -84,12 +69,12 @@ blueprint:
             text:
               multiline: true
           default: |
-            Single target only - fuzzy match from exposed light entities:
-            - Entity: "desk lamp" → light.desk_brendan (match friendly_name)
-            - Area: "bedroom", "kitchen" → area_id 
-            - Floor: "upstairs" → upstairs_areas, "downstairs" → downstairs_areas
-            - All: "all", "everywhere", "whole house" → all areas
-            **CRITICAL**: Never mix area+entity. Never use empty string. If unclear, use area from device.
+            Pick ONE target type from exposed entities (PRIORITY ORDER):
+            1. SPECIFIC ENTITY: "ceiling light living room" → light.ceiling_living (fuzzy friendly_name match)
+            2. FLOOR: "upstairs", "downstairs" → floor.upstairs  
+            3. AREA: "living room", "bedroom" → area.living_room
+            4. ALL: "everywhere", "whole house" → all floors
+            **CRITICAL**: NEVER mix types. "ceiling light in living room" = ENTITY (not area!). Never use empty string.
 
         brightness_prompt:
           name: Brightness Prompt
@@ -124,7 +109,7 @@ blueprint:
     additional_actions:
       name: Additional actions
       icon: mdi:wrench
-      description: Actions after light control (notify, scenes, etc.). Variables; target, action, brightness_pct, color_name available.
+      description: Actions after light control (notify, scenes, etc.). Variables: target, action, brightness_pct, color_name available.
       collapsed: true
       input:
         actions:
@@ -138,7 +123,7 @@ max_exceeded: silent
 
 description: |
   This script controls lights based on voice requests. Use for turn on/off, dim/brighten, color changes. 
-  Specify target (desk lamp, bedroom, upstairs, all) and parameters (brightness 50%, red, transition 5s). 
+  Specify target (ceiling light living room, upstairs, bedroom, all) and parameters (brightness 50%, red, transition 5s). 
   Use this tool for all light control requests.
 
 fields:
@@ -203,9 +188,7 @@ fields:
 
 sequence:
   - variables:
-      upstairs_areas_list: !input upstairs_areas
-      downstairs_areas_list: !input downstairs_areas
-      all_areas_list: "{{ upstairs_areas_list + downstairs_areas_list }}"
+      default_area_id: "{{ !input default_area | default('') }}"
       
       raw_target: "{{ target | lower | trim }}"
       raw_action: "{{ action }}"
@@ -220,21 +203,7 @@ sequence:
           {{ brightness_pct | default(0) | int }}
         {% endif %}
       
-      # Area resolution
-      resolved_areas: >
-        {% if raw_target == 'upstairs' %}
-          {{ upstairs_areas_list }}
-        {% elif raw_target == 'downstairs' %}
-          {{ downstairs_areas_list }}
-        {% elif raw_target in ['all', 'everywhere', 'house', 'whole house'] %}
-          {{ all_areas_list }}
-        {% elif states.area | selectattr('entity_id', 'search', '^area\\.' ~ raw_target ~ '$') | list %}
-          ["{{ raw_target }}"]
-        {% else %}
-          []
-        {% endif %}
-      
-      # Entity fuzzy matching
+      # 1. ENTITY fuzzy matching (HIGHEST priority)
       resolved_entities: >
         {% set ns = namespace(entities=[]) %}
         {% for light in states.light %}
@@ -245,52 +214,12 @@ sequence:
         {% endfor %}
         {{ ns.entities }}
       
-      target_data:
-        area_id: "{{ resolved_areas if resolved_areas else 'NA' }}"
-        entity_id: "{{ resolved_entities if resolved_entities else 'NA' }}"
+      # 2. FLOOR resolution
+      resolved_floors: >
+        {% set floors = states.floor | selectattr('entity_id', 'search', '^floor\\.' ~ raw_target ~ '$') | map(attribute='entity_id') | list %}
+        {{ floors if floors else [] }}
       
-      service_name: >
-        {% if raw_action in ['dim', 'brighten'] %}
-          light.turn_on
-        {% else %}
-          light.{{ raw_action }}
-        {% endif %}
-      
-      clean_target: "{{ target_data | dictfilter('ne', 'NA') }}"
-      
-      # Clean service data using proper Jinja2 dict building
-      service_data: >
-        {% set data = namespace(dict={}) %}
-        {% if brightness_pct_final > 0 %}
-          {% set data.dict = data.dict | combine({'brightness_pct': brightness_pct_final}) %}
-        {% endif %}
-        {% if color_name and color_name != '' and color_name != 'NA' %}
-          {% set data.dict = data.dict | combine({'color_name': color_name}) %}
-        {% endif %}
-        {% if rgb_color and rgb_color != '' and rgb_color != 'NA' %}
-          {% set data.dict = data.dict | combine({'rgb_color': rgb_color | from_json | default(rgb_color)}) %}
-        {% endif %}
-        {% if color_temp_kelvin and color_temp_kelvin != '' and color_temp_kelvin != 'NA' %}
-          {% set data.dict = data.dict | combine({'color_temp_kelvin': color_temp_kelvin | int(0)}) %}
-        {% endif %}
-        {% if transition and transition != '' and transition != 'NA' %}
-          {% set data.dict = data.dict | combine({'transition': transition | float(0)}) %}
-        {% endif %}
-        {{ data.dict }}
-
-  # Validate
-  - if:
-      - condition: template
-        value_template: "{{ clean_target | length == 0 }}"
-    then:
-      - stop: "No valid lights found for '{{ raw_target }}'"
-        response_variable: invalid_target
-
-  # Execute
-  - service: "{{ service_name }}"
-    target: "{{ clean_target }}"
-    data: "{{ service_data }}"
-    continue_on_error: true
-
-  # Additional actions
-  - sequence: !input actions
+      # 3. AREA resolution
+      resolved_areas: >
+        {% set areas = states.area | selectattr('entity_id', 'search', '^area\\.' ~ raw_target ~ '$') | map(attribute='entity_id') | map('regex_replace', 'area\\.', '') | list %}
+        {{ areas if
