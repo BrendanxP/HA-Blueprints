@@ -1,71 +1,139 @@
 blueprint:
-  name: LLM Complete Lights Control
+  name: LLM Script for Lights voice requests
+  source_url: https://github.com/BrendanxP/HA-Blueprints/edit/main/llm_lights_script.yaml
   description: |
-    Complete light control: entity/area/floor + brightness/RGB/temp/effect/transition.
+    This script controls ALL lights via voice. Use for single lights, areas, floors.
     
-    MANDATORY: action + target_type + target_name
-    OPTIONAL (PRIORITY order): brightness_pct > rgb_color > color_temp_kelvin > brightness_step_pct > effect > transition
+    Parameters: action, target_type (entity/area/floor), target_name, brightness_pct, rgb_color, color_temp_kelvin, etc.
     
-    Use for ALL light requests. Dynamic - no fixed lists.
+    Use this tool whenever user requests lights.
   domain: script
+  author: BrendanxP, Adapted from Music Assistant
+  homeassistant:
+    min_version: 2024.6.0
   input:
+    light_settings:
+      name: Light Settings
+      icon: mdi:lightbulb
+      description: Configure light behavior
+      input:
+        default_area:
+          name: Default Area
+          description: Fallback if no target specified
+          selector:
+            area: {}
+          default: {}
     prompt_settings:
-      name: LLM Prompts
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      collapsed: true
       input:
         action_prompt:
-          default: '"action": "turn_on", "turn_off", or "toggle" - ALWAYS REQUIRED'
+          name: Action Prompt
+          selector:
+            text:
+              multiline: true
+          default: |
+            MANDATORY. "action" = "turn_on", "turn_off", "toggle".
         target_type_prompt:
+          name: Target Type Prompt
+          selector:
+            text:
+              multiline: true
           default: |
-            "target_type": "entity" (single light), "area" (room), "floor" (upstairs).
-            EXCLUSIVE - pick ONE only. Never mix.
-        brightness_prompt:
+            MANDATORY "target_type" = "entity" (single light), "area" (room), "floor" (upstairs).
+            Pick ONE only. Examples: "Desk Brendan"=entity, "Living"=area, "Upstairs"=floor.
+        target_name_prompt:
+          name: Target Name Prompt
+          selector:
+            text:
+              multiline: true
           default: |
-            "brightness_pct": 0-100 PRIORITY. "half"=50, "dim"=30, "bright"=80, "+10%"=brightness_step_pct=10
-  fields:
-    action:
-      selector: select
-      options: [turn_on, turn_off, toggle]
-      required: true
-    target_type:
-      selector: select
-      options: [entity, area, floor]
-      required: true
-    target_name:
-      selector: text:
-      required: true
-    brightness_pct:
-      selector: number: {min: 0, max: 100}
-    brightness_step_pct:
-      selector: number: {min: -100, max: 100}
-    rgb_color:
-      selector: text:
-    color_temp_kelvin:
-      selector: number: {min: 2000, max: 6500}
-    effect:
-      selector: text:
-    transition:
-      selector: number: {min: 0, max: 60}
+            Exact HA name. "Desk Brendan", "Living Ceiling", "Nanoleaf Triangles", "Living", "Upstairs".
+        brightness_pct_prompt:
+          name: Brightness Prompt
+          selector:
+            text:
+              multiline: true
+          default: |
+            brightness_pct 0-100. "half"=50, "dim"=30, "full"=100, "bright"=80. PRIORITY param.
+        rgb_color_prompt:
+          name: RGB Prompt
+          selector:
+            text:
+              multiline: true
+          default: |
+            rgb_color "[R,G,B]" or "R,G,B". red="255,0,0", blue="0,0,255". RGB lights only.
+        color_temp_kelvin_prompt:
+          name: Color Temp Prompt
+          selector:
+            text:
+              multiline: true
+          default: |
+            color_temp_kelvin 2000-6500K. "warm"=2700, "cool"=6500.
+  addition_actions:
+    name: Additional actions
+    description: Actions after light command
+    input:
+      actions:
+        selector:
+          action: {}
+        default: []
+
+mode: parallel
+max_exceeded: silent
+description: Lights control script. Use parameters as described.
+fields:
+  action:
+    selector:
+      select:
+        options: [turn_on, turn_off, toggle]
+    name: Action
+    description: !input action_prompt
+    required: true
+  target_type:
+    selector:
+      select:
+        options: [entity, area, floor]
+    name: Target Type
+    description: !input target_type_prompt
+    required: true
+  target_name:
+    selector:
+      text: {}
+    name: Target Name
+    description: !input target_name_prompt
+    required: true
+  brightness_pct:
+    selector:
+      number:
+        min: 0
+        max: 100
+    name: Brightness (%)
+    description: !input brightness_pct_prompt
+  rgb_color:
+    selector:
+      text: {}
+    name: RGB Color
+    description: !input rgb_color_prompt
+  color_temp_kelvin:
+    selector:
+      number:
+        min: 2000
+        max: 6500
+    name: Color Temp (K)
+    description: !input color_temp_kelvin_prompt
 
 sequence:
 - variables:
-    target: >
-      {% if target_type == 'entity' %}
-        entity_id: "{{ target_name }}"
-      {% elif target_type == 'area' %}
-        area_id: "{{ target_name }}"
-      {% else %}
-        floor_id: "{{ target_name }}"
-      {% endif %}
-    data: >
-      {% set d = {} %}
-      {% if brightness_pct is number and brightness_pct > 0 %}{% set d = d | combine({'brightness_pct': brightness_pct|int}) %}{% endif %}
-      {% if brightness_step_pct is number %}{% set d = d | combine({'brightness_step_pct': brightness_step_pct|int}) %}{% endif %}
-      {% if rgb_color and rgb_color.strip() != '' %}{% set d = d | combine({'rgb_color': rgb_color.split(',')|map('trim')|map('int')|list}) %}{% endif %}
-      {% if color_temp_kelvin is number %}{% set d = d | combine({'color_temp_kelvin': color_temp_kelvin|int}) %}{% endif %}
-      {% if effect and effect.strip() != '' %}{% set d = d | combine({'effect': effect}) %}{% endif %}
-      {% if transition is number %}{% set d = d | combine({'transition': transition}) %}{% endif %}
-      {{ d if d else {} }}
-- service: "light.{{ action }}"
-  target: "{{ target }}"
-  data: "{{ data }}"
-mode: parallel
+    version: 20251229
+    default_area: !input default_area
+    light_data: '{% set lights = integration_entities("light") %}
+      {% set light_names = lights | map("state_attr", "friendly_name") | list %}
+      {% set ns = namespace(lights=[]) %}
+      {% if target_type == "entity" %}
+        {% if target_name in lights %}
+          {% set ns.lights = ns.lights + [target_name] %}
+        {% elif target_name in light_names %}
+          {% set entity = lights | select("is_state_attr", "friendly_name", target_name) | first %}
+          {% set ns.lights
