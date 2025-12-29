@@ -109,7 +109,7 @@ blueprint:
     additional_actions:
       name: Additional actions
       icon: mdi:wrench
-      description: Actions after light control (notify, scenes, etc.). Variables: target, action, brightness_pct, color_name available.
+      description: Actions after light control (notify, scenes, etc.). Variables; target, action, brightness_pct, color_name available.
       collapsed: true
       input:
         actions:
