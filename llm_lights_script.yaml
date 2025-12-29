@@ -191,100 +191,58 @@ sequence:
       raw_target: "{{ target | lower | trim }}"
       raw_action: "{{ action }}"
       
-      # Dynamic brightness
-      brightness_pct_final: >
-        {% if raw_action == 'dim' %}
-          {{ [brightness_pct | default(50) | int, 40] | max }}
-        {% elif raw_action == 'brighten' %}
-          {{ [brightness_pct | default(80) | int, 70] | min }}
-        {% else %}
-          {{ brightness_pct | default(0) | int }}
-        {% endif %}
-      
-      # 1. ENTITY fuzzy matching (HIGHEST priority)
-      resolved_entities: >
+      # 1. ENTITY fuzzy matching (PRIORITY 1)
+      entity_match: >
         {% set ns = namespace(entities=[]) %}
         {% for light in states.light %}
-          {% if (light.friendly_name | lower | default('')) | regex_search('.*' ~ raw_target ~ '.*') or
-                (light.name | lower) | regex_search('.*' ~ raw_target ~ '.*') %}
+          {% if raw_target in (light.friendly_name | lower | default('')) or raw_target in (light.name | lower) %}
             {% set ns.entities = ns.entities + [light.entity_id] %}
           {% endif %}
         {% endfor %}
         {{ ns.entities }}
       
-      # 2. FLOOR resolution
-      resolved_floors: >
-        {% set floors = states.floor | selectattr('entity_id', 'search', '^floor\\.' ~ raw_target ~ '$') | map(attribute='entity_id') | list %}
-        {{ floors if floors else [] }}
+      # 2. FLOOR check (your floors: "upstairs", "downstairs")
+      is_floor: "{{ raw_target in ['upstairs', 'downstairs'] }}"
       
-      # 3. AREA resolution  
-      resolved_areas: >
-        {% set areas = states.area | selectattr('entity_id', 'search', '^area\\.' ~ raw_target ~ '$') | map(attribute='entity_id') | map('regex_replace', 'area\\.', '') | list %}
-        {{ areas if areas else [] }}
+      # 3. AREA check
+      is_area: >
+        {{ states.area | selectattr('entity_id', 'search', '^area\\.' ~ raw_target ~ '$') | list | count > 0 }}
       
       target_data:
-        entity_id: "{{ resolved_entities if resolved_entities else 'NA' }}"
-        floor_id: "{{ resolved_floors if resolved_floors else 'NA' }}"
-        area_id: "{{ resolved_areas if resolved_areas else 'NA' }}"
+        entity_id: "{{ entity_match if entity_match else 'NA' }}"
+        area_id: "{{ [raw_target] if is_area and not is_floor else 'NA' }}"
+        floor_id: "{{ [raw_target] if is_floor else 'NA' }}"
       
       service_name: >
-        {% if raw_action in ['dim', 'brighten'] %}
-          light.turn_on
+        {% if raw_action in ['dim', 'brighten'] %} light.turn_on
+        {% else %} light.{{ raw_action }} {% endif %}
+      
+      clean_target: >
+        {% if target_data.entity_id != 'NA' %}
+          {"entity_id": {{ target_data.entity_id }}}
+        {% elif target_data.floor_id != 'NA' %}
+          {"floor_id": {{ target_data.floor_id }}}
+        {% elif target_data.area_id != 'NA' %}
+          {"area_id": {{ target_data.area_id }}}
+        {% elif raw_target in ['all', 'everywhere', 'house', 'whole house'] %}
+          {"floor_id": ["upstairs", "downstairs"]}
         {% else %}
-          light.{{ raw_action }}
+          {}
         {% endif %}
       
-      # PRIORITY: entity > floor > area > all > default
-      clean_target: >
-        {% set valid_target = {} %}
-        {% if target_data.entity_id != 'NA' %}
-          {% set valid_target = {'entity_id': target_data.entity_id} %}
-        {% elif target_data.floor_id != 'NA' %}
-          {% set valid_target = {'floor_id': target_data.floor_id} %}
-        {% elif target_data.area_id != 'NA' %}
-          {% set valid_target = {'area_id': target_data.area_id} %}
-        {% elif raw_target in ['all', 'everywhere', 'house', 'whole house'] %}
-          {% set all_floors = states.floor | map(attribute='entity_id') | list %}
-          {% set valid_target = {'floor_id': all_floors} %}
-        {% else %}
-          {{ {} }}
-        {% endif %}
-        {{ valid_target }}
-
-
-      # Service data
       service_data: >
-        {% set data = namespace(dict={}) %}
-        {% if brightness_pct_final > 0 %}
-          {% set data.dict = data.dict | combine({'brightness_pct': brightness_pct_final}) %}
+        {% set data = {} %}
+        {% if brightness_pct | default(0) | int > 0 %}
+          {{ data | combine({'brightness_pct': brightness_pct | int}) }}
+        {% else %}
+          {{ data }}
         {% endif %}
-        {% if color_name and color_name != '' and color_name != 'NA' %}
-          {% set data.dict = data.dict | combine({'color_name': color_name}) %}
-        {% endif %}
-        {% if rgb_color and rgb_color != '' and rgb_color != 'NA' %}
-          {% set data.dict = data.dict | combine({'rgb_color': rgb_color | from_json | default(rgb_color)}) %}
-        {% endif %}
-        {% if color_temp_kelvin and color_temp_kelvin != '' and color_temp_kelvin != 'NA' %}
-          {% set data.dict = data.dict | combine({'color_temp_kelvin': color_temp_kelvin | int(0)}) %}
-        {% endif %}
-        {% if transition and transition != '' and transition != 'NA' %}
-          {% set data.dict = data.dict | combine({'transition': transition | float(0)}) %}
-        {% endif %}
-        {{ data.dict }}
 
-  # Validate
-  - if:
-      - condition: template
-        value_template: "{{ clean_target | length == 0 }}"
-    then:
-      - stop: "No valid lights found for '{{ raw_target }}'"
-        response_variable: invalid_target
-
-  # Execute
+  # Execute (music blueprint style)
   - service: "{{ service_name }}"
     target: "{{ clean_target }}"
     data: "{{ service_data }}"
     continue_on_error: true
-
-  # Additional actions
+  
   - sequence: !input actions
+
