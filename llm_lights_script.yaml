@@ -1,6 +1,10 @@
 blueprint:
   name: LLM Script for Light Control
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml
+  domain: script
+  author: Brendan (adapted from Music Assistant LLM blueprint)
+  homeassistant:
+    min_version: 2024.6.0
   description: |
     # Creates a script which will allow voice requests for Light Control
     
@@ -25,274 +29,268 @@ blueprint:
     |`brightness_pct`|Brightness percentage 0-100|
     |`color_name`|Color name (red, blue, etc.)|
 
-domain: script
-author: Brendan (adapted from Music Assistant LLM blueprint)
-homeassistant:
-  min_version: 2024.6.0
+  input:
+    light_settings:
+      name: Light Settings
+      icon: mdi:lightbulb
+      description: Configure default areas and floors for light control
+      input:
+        default_area:
+          name: Default Area
+          description: Fallback area if no target specified
+          selector:
+            area: {}
+          default: {}
+        
+        upstairs_areas:
+          name: Upstairs Areas
+          description: All area IDs on upstairs floor (bedroom, hallway, etc.)
+          selector:
+            area:
+              multiple: true
+        
+        downstairs_areas:
+          name: Downstairs Areas
+          description: All area IDs on downstairs floor (living_room, kitchen, etc.)
+          selector:
+            area:
+              multiple: true
 
-input:
-  light_settings:
-    name: Light Settings
-    icon: mdi:lightbulb
-    description: Configure default areas and floors for light control
-    input:
-      default_area:
-        name: Default Area
-        description: Fallback area if no target specified
-        selector:
-          area: {}
-        default: {}
-      
-      upstairs_areas:
-        name: Upstairs Areas
-        description: All area IDs on upstairs floor (bedroom, hallway, etc.)
-        selector:
-          area:
-            multiple: true
-      
-      downstairs_areas:
-        name: Downstairs Areas
-        description: All area IDs on downstairs floor (living_room, kitchen, etc.)
-        selector:
-          area:
-            multiple: true
+    prompt_settings:
+      name: Prompt settings for the LLM
+      icon: mdi:robot
+      description: Fine-tune prompts for your specific LLM model. Defaults work well.
+      collapsed: true
+      input:
+        action_prompt:
+          name: Action Prompt
+          description: Prompt for light action
+          selector:
+            text:
+              multiline: true
+          default: |
+            This argument is mandatory! "action" can only be:
+            - "turn_on" - turn lights on
+            - "turn_off" - turn lights off  
+            - "toggle" - toggle light state
+            - "dim" - reduce brightness (use brightness_pct: 30-70)
+            - "brighten" - increase brightness (use brightness_pct: 70-100)
+            For "dim the lights" use action: "dim", brightness_pct: 50. For "make brighter" use "brighten", brightness_pct: 80.
 
-  prompt_settings:
-    name: Prompt settings for the LLM
-    icon: mdi:robot
-    description: Fine-tune prompts for your specific LLM model. Defaults work well.
-    collapsed: true
-    input:
-      action_prompt:
-        name: Action Prompt
-        description: Prompt for light action
-        selector:
-          text:
-            multiline: true
-        default: |
-          This argument is mandatory! "action" can only be:
-          - "turn_on" - turn lights on
-          - "turn_off" - turn lights off  
-          - "toggle" - toggle light state
-          - "dim" - reduce brightness (use brightness_pct: 30-70)
-          - "brighten" - increase brightness (use brightness_pct: 70-100)
-          For "dim the lights" use action: "dim", brightness_pct: 50. For "make brighter" use "brighten", brightness_pct: 80.
+        target_prompt:
+          name: Target Prompt
+          description: Prompt for target resolution
+          selector:
+            text:
+              multiline: true
+          default: |
+            Single target only - fuzzy match from exposed light entities:
+            - Entity: "desk lamp" → light.desk_brendan (match friendly_name)
+            - Area: "bedroom", "kitchen" → area_id 
+            - Floor: "upstairs" → upstairs_areas, "downstairs" → downstairs_areas
+            - All: "all", "everywhere", "whole house" → all areas
+            **CRITICAL**: Never mix area+entity. Never use empty string. If unclear, use area from device.
 
-      target_prompt:
-        name: Target Prompt
-        description: Prompt for target resolution
-        selector:
-          text:
-            multiline: true
-        default: |
-          Single target only - fuzzy match from exposed light entities:
-          - Entity: "desk lamp" → light.desk_brendan (match friendly_name)
-          - Area: "bedroom", "kitchen" → area_id 
-          - Floor: "upstairs" → upstairs_areas, "downstairs" → downstairs_areas
-          - All: "all", "everywhere", "whole house" → all areas
-          **CRITICAL**: Never mix area+entity. Never use empty string. If unclear, use area from device.
+        brightness_prompt:
+          name: Brightness Prompt
+          selector:
+            text:
+              multiline: true
+          default: |
+            "brightness_pct": 0-100 (0=off, 100=max). 
+            dim→40-60, brighten→70-90, "half"→50, "full"→100.
+            Only use if light supports brightness (check supported_features).
 
-      brightness_prompt:
-        name: Brightness Prompt
-        selector:
-          text:
-            multiline: true
-        default: |
-          "brightness_pct": 0-100 (0=off, 100=max). 
-          dim→40-60, brighten→70-90, "half"→50, "full"→100.
-          Only use if light supports brightness (check supported_features).
+        color_prompt:
+          name: Color Prompt
+          selector:
+            text:
+              multiline: true
+          default: |
+            Only if light supports color (check supported_color_modes):
+            - "color_name": "red", "blue", "warm_white"
+            - "rgb_color": "[255,0,0]" (list format)
+            - "color_temp_kelvin": 2700-6500
+            Skip if unsupported.
 
-      color_prompt:
-        name: Color Prompt
-        selector:
-          text:
-            multiline: true
-        default: |
-          Only if light supports color (check supported_color_modes):
-          - "color_name": "red", "blue", "warm_white"
-          - "rgb_color": "[255,0,0]" (list format)
-          - "color_temp_kelvin": 2700-6500
-          Skip if unsupported.
+        transition_prompt:
+          name: Transition Prompt
+          selector:
+            text:
+              multiline: true
+          default: |
+            "transition": seconds (0.5, 1, 3, 5). Use for smooth changes.
 
-      transition_prompt:
-        name: Transition Prompt
-        selector:
-          text:
-            multiline: true
-        default: |
-          "transition": seconds (0.5, 1, 3, 5). Use for smooth changes.
+    additional_actions:
+      name: Additional actions
+      icon: mdi:wrench
+      description: Actions after light control (notify, scenes, etc.). Variables; target, action, brightness_pct, color_name available.
+      collapsed: true
+      input:
+        actions:
+          name: Additional actions
+          selector:
+            action: {}
+          default: []
 
-  additional_actions:
-    name: Additional actions
-    icon: mdi:wrench
-    description: Actions after light control (notify, scenes, etc.). Variables; target, action, brightness_pct, color_name available.
-    collapsed: true
-    input:
-      actions:
-        name: Additional actions
-        selector:
-          action: {}
-        default: []
+  mode: parallel
+  max_exceeded: silent
 
-mode: parallel
-max_exceeded: silent
+  description: |
+    This script controls lights based on voice requests. Use for turn on/off, dim/brighten, color changes. 
+    Specify target (desk lamp, bedroom, upstairs, all) and parameters (brightness 50%, red, transition 5s). 
+    Use this tool for all light control requests.
 
-description: |
-  This script controls lights based on voice requests. Use for turn on/off, dim/brighten, color changes. 
-  Specify target (desk lamp, bedroom, upstairs, all) and parameters (brightness 50%, red, transition 5s). 
-  Use this tool for all light control requests.
+  fields:
+    action:
+      selector:
+        select:
+          options:
+            - turn_on
+            - turn_off
+            - toggle
+            - dim
+            - brighten
+      name: Action
+      description: !input action_prompt
+      required: true
+    
+    target:
+      selector:
+        text: {}
+      name: Target
+      description: !input target_prompt
+      required: true
+    
+    brightness_pct:
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          mode: slider
+      name: Brightness %
+      description: !input brightness_prompt
+    
+    color_name:
+      selector:
+        text: {}
+      name: Color Name
+      description: !input color_prompt
+    
+    rgb_color:
+      selector:
+        text: {}
+      name: RGB Color
+      description: !input color_prompt
+    
+    color_temp_kelvin:
+      selector:
+        number:
+          min: 2000
+          max: 6500
+      name: Color Temp Kelvin
+      description: !input color_prompt
+    
+    transition:
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 0.1
+      name: Transition (seconds)
+      description: !input transition_prompt
 
-fields:
-  action:
-    selector:
-      select:
-        options:
-          - turn_on
-          - turn_off
-          - toggle
-          - dim
-          - brighten
-    name: Action
-    description: !input action_prompt
-    required: true
-  
-  target:
-    selector:
-      text: {}
-    name: Target
-    description: !input target_prompt
-    required: true
-  
-  brightness_pct:
-    selector:
-      number:
-        min: 0
-        max: 100
-        step: 1
-        mode: slider
-    name: Brightness %
-    description: !input brightness_prompt
-  
-  color_name:
-    selector:
-      text: {}
-    name: Color Name
-    description: !input color_prompt
-  
-  rgb_color:
-    selector:
-      text: {}
-    name: RGB Color
-    description: !input color_prompt
-  
-  color_temp_kelvin:
-    selector:
-      number:
-        min: 2000
-        max: 6500
-    name: Color Temp Kelvin
-    description: !input color_prompt
-  
-  transition:
-    selector:
-      number:
-        min: 0
-        max: 30
-        step: 0.1
-    name: Transition (seconds)
-    description: !input transition_prompt
-
-sequence:
-  - variables:
-      upstairs_areas_list: !input upstairs_areas
-      downstairs_areas_list: !input downstairs_areas
-      all_areas_list: "{{ upstairs_areas_list + downstairs_areas_list }}"
-      
-      raw_target: "{{ target | lower | trim }}"
-      raw_action: "{{ action }}"
-      
-      # Dynamic brightness
-      brightness_pct_final: >
-        {% if raw_action == 'dim' %}
-          {{ [brightness_pct | default(50) | int, 40] | max }}
-        {% elif raw_action == 'brighten' %}
-          {{ [brightness_pct | default(80) | int, 70] | min }}
-        {% else %}
-          {{ brightness_pct | default(0) | int }}
-        {% endif %}
-      
-      # Area resolution
-      resolved_areas: >
-        {% if raw_target == 'upstairs' %}
-          {{ upstairs_areas_list }}
-        {% elif raw_target == 'downstairs' %}
-          {{ downstairs_areas_list }}
-        {% elif raw_target in ['all', 'everywhere', 'house', 'whole house'] %}
-          {{ all_areas_list }}
-        {% elif states.area | selectattr('entity_id', 'search', '^area\\.' ~ raw_target ~ '$') | list %}
-          ["{{ raw_target }}"]
-        {% else %}
-          []
-        {% endif %}
-      
-      # Entity fuzzy matching
-      resolved_entities: >
-        {% set ns = namespace(entities=[]) %}
-        {% for light in states.light %}
-          {% if (light.friendly_name | lower | default('')) | regex_search('.*' ~ raw_target ~ '.*') or
-                (light.name | lower) | regex_search('.*' ~ raw_target ~ '.*') %}
-            {% set ns.entities = ns.entities + [light.entity_id] %}
+  sequence:
+    - variables:
+        upstairs_areas_list: !input upstairs_areas
+        downstairs_areas_list: !input downstairs_areas
+        all_areas_list: "{{ upstairs_areas_list + downstairs_areas_list }}"
+        
+        raw_target: "{{ target | lower | trim }}"
+        raw_action: "{{ action }}"
+        
+        # Dynamic brightness
+        brightness_pct_final: >
+          {% if raw_action == 'dim' %}
+            {{ [brightness_pct | default(50) | int, 40] | max }}
+          {% elif raw_action == 'brighten' %}
+            {{ [brightness_pct | default(80) | int, 70] | min }}
+          {% else %}
+            {{ brightness_pct | default(0) | int }}
           {% endif %}
-        {% endfor %}
-        {{ ns.entities }}
-      
-      target_data:
-        area_id: "{{ resolved_areas if resolved_areas else 'NA' }}"
-        entity_id: "{{ resolved_entities if resolved_entities else 'NA' }}"
-      
-      service_name: >
-        {% if raw_action in ['dim', 'brighten'] %}
-          light.turn_on
-        {% else %}
-          light.{{ raw_action }}
-        {% endif %}
-      
-      clean_target: "{{ target_data | dictfilter('ne', 'NA') }}"
-      
-      # Clean service data using proper Jinja2 dict building
-      service_data: >
-        {% set data = namespace(dict={}) %}
-        {% if brightness_pct_final > 0 %}
-          {% set data.dict = data.dict | combine({'brightness_pct': brightness_pct_final}) %}
-        {% endif %}
-        {% if color_name and color_name != '' and color_name != 'NA' %}
-          {% set data.dict = data.dict | combine({'color_name': color_name}) %}
-        {% endif %}
-        {% if rgb_color and rgb_color != '' and rgb_color != 'NA' %}
-          {% set data.dict = data.dict | combine({'rgb_color': rgb_color | from_json | default(rgb_color)}) %}
-        {% endif %}
-        {% if color_temp_kelvin and color_temp_kelvin != '' and color_temp_kelvin != 'NA' %}
-          {% set data.dict = data.dict | combine({'color_temp_kelvin': color_temp_kelvin | int(0)}) %}
-        {% endif %}
-        {% if transition and transition != '' and transition != 'NA' %}
-          {% set data.dict = data.dict | combine({'transition': transition | float(0)}) %}
-        {% endif %}
-        {{ data.dict }}
+        
+        # Area resolution
+        resolved_areas: >
+          {% if raw_target == 'upstairs' %}
+            {{ upstairs_areas_list }}
+          {% elif raw_target == 'downstairs' %}
+            {{ downstairs_areas_list }}
+          {% elif raw_target in ['all', 'everywhere', 'house', 'whole house'] %}
+            {{ all_areas_list }}
+          {% elif states.area | selectattr('entity_id', 'search', '^area\\.' ~ raw_target ~ '$') | list %}
+            ["{{ raw_target }}"]
+          {% else %}
+            []
+          {% endif %}
+        
+        # Entity fuzzy matching
+        resolved_entities: >
+          {% set ns = namespace(entities=[]) %}
+          {% for light in states.light %}
+            {% if (light.friendly_name | lower | default('')) | regex_search('.*' ~ raw_target ~ '.*') or
+                  (light.name | lower) | regex_search('.*' ~ raw_target ~ '.*') %}
+              {% set ns.entities = ns.entities + [light.entity_id] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.entities }}
+        
+        target_data:
+          area_id: "{{ resolved_areas if resolved_areas else 'NA' }}"
+          entity_id: "{{ resolved_entities if resolved_entities else 'NA' }}"
+        
+        service_name: >
+          {% if raw_action in ['dim', 'brighten'] %}
+            light.turn_on
+          {% else %}
+            light.{{ raw_action }}
+          {% endif %}
+        
+        clean_target: "{{ target_data | dictfilter('ne', 'NA') }}"
+        
+        # Clean service data using proper Jinja2 dict building
+        service_data: >
+          {% set data = namespace(dict={}) %}
+          {% if brightness_pct_final > 0 %}
+            {% set data.dict = data.dict | combine({'brightness_pct': brightness_pct_final}) %}
+          {% endif %}
+          {% if color_name and color_name != '' and color_name != 'NA' %}
+            {% set data.dict = data.dict | combine({'color_name': color_name}) %}
+          {% endif %}
+          {% if rgb_color and rgb_color != '' and rgb_color != 'NA' %}
+            {% set data.dict = data.dict | combine({'rgb_color': rgb_color | from_json | default(rgb_color)}) %}
+          {% endif %}
+          {% if color_temp_kelvin and color_temp_kelvin != '' and color_temp_kelvin != 'NA' %}
+            {% set data.dict = data.dict | combine({'color_temp_kelvin': color_temp_kelvin | int(0)}) %}
+          {% endif %}
+          {% if transition and transition != '' and transition != 'NA' %}
+            {% set data.dict = data.dict | combine({'transition': transition | float(0)}) %}
+          {% endif %}
+          {{ data.dict }}
 
-  # Validate
-  - if:
-      - condition: template
-        value_template: "{{ clean_target | length == 0 }}"
-    then:
-      - stop: "No valid lights found for '{{ raw_target }}'"
-        response_variable: invalid_target
+    # Validate
+    - if:
+        - condition: template
+          value_template: "{{ clean_target | length == 0 }}"
+      then:
+        - stop: "No valid lights found for '{{ raw_target }}'"
+          response_variable: invalid_target
 
-  # Execute
-  - service: "{{ service_name }}"
-    target: "{{ clean_target }}"
-    data: "{{ service_data }}"
-    continue_on_error: true
+    # Execute
+    - service: "{{ service_name }}"
+      target: "{{ clean_target }}"
+      data: "{{ service_data }}"
+      continue_on_error: true
 
-  # Additional actions
-  - sequence: !input actions
-
+    # Additional actions
+    - sequence: !input actions
