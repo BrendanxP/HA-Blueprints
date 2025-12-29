@@ -3,6 +3,8 @@ blueprint:
   source_url: https://github.com/music-assistant/voice-support/blob/main/llm-script-blueprint/llm_voice_script.yaml
   domain: script
   author: Brendan (adapted from Music Assistant LLM blueprint)
+  homeassistant:
+    min_version: 2024.6.0
   description: |
     # Creates a script which will allow voice requests for Light Control
     
@@ -130,9 +132,6 @@ blueprint:
           selector:
             action: {}
           default: []
-
-homeassistant:
-  min_version: 2024.6.0
 
 mode: parallel
 max_exceeded: silent
