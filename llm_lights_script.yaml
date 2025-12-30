@@ -74,31 +74,25 @@ blueprint:
         - The list of valid `area_id` and `floor_id` values for this specific house.
     
         Your job is to:
-        1. Select EXACTLY ONE target type:
-           - SPECIFIC ENTITY: choose when the user refers to a specific light or group.
+        1. Select EXACTLY ONE target in EXACTLY ONE type:
+           - SPECIFIC ENTITY: choose when the user refers to a specific light entiity.
            - AREA: when the user mentions a room/area.
            - FLOOR: when the user mentions a whole floor.
            - ALL: "everywhere", "whole house" → all floors.
     
-        2. You MUST only use names that exist in the provided lists:
+        2. You MUST only use a name that exist in the provided lists:
            - Never invent or normalize room names.
            - Example: if the only area is "living" (area_id: living), **never** use "living room".
            - If there is an area "living_room" and aliases "living", "sitting area", you **must** map
              all of these back to `living_room`.
-
-        3. Priority order:
-           1. SPECIFIC ENTITY (best match in friendly_name).
-           2. AREA (valid area_id only).
-           3. FLOOR (valid floor_id only).
-           4. ALL (special keywords only).
     
-        4. Rules:
+        3. Rules:
            - NEVER mix types. "ceiling light in <room>" = ENTITY, not area.
            - If the user says something that does not match any known entity/area/floor, return an empty target.
-           - Never output partial or guessed area names; always exactly match an existing `area_id` or entity name.
+           - Never output partial or guessed area names; always exactly match an existing `area_id`, `entity_id`, floor ("upstairs" or "downstairs"), or "all".
 
         Examples:
-           - "turn off <area>" → target: "<aream>"
+           - "turn off the lights in <area>" → target: "<area>"
            - "dim upstairs" → target: "upstairs"
            - "make <light> in <area> red" → target: "<light>"
 
