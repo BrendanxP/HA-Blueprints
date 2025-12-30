@@ -102,35 +102,35 @@ blueprint:
            - "dim upstairs" → target: "upstairs"
            - "make <light> in <area> red" → target: "<light>"
 
-        brightness_prompt:
-          name: Brightness Prompt
-          selector:
-            text:
-              multiline: true
-          default: |
-            "brightness_pct": 0-100 (0=off, 100=max). 
-            dim→40-60, brighten→70-90, "half"→50, "full"→100.
-            Only use if light supports brightness (check supported_features).
+    brightness_prompt:
+      name: Brightness Prompt
+      selector:
+        text:
+          multiline: true
+      default: |
+        "brightness_pct": 0-100 (0=off, 100=max). 
+        dim→40-60, brighten→70-90, "half"→50, "full"→100.
+        Only use if light supports brightness (check supported_features).
 
-        color_prompt:
-          name: Color Prompt
-          selector:
-            text:
-              multiline: true
-          default: |
-            Only if light supports color (check supported_color_modes):
-            - "color_name": "red", "blue", "warm_white"
-            - "rgb_color": "[255,0,0]" (list format)
-            - "color_temp_kelvin": 2700-6500
-            Skip if unsupported.
+    color_prompt:
+      name: Color Prompt
+      selector:
+        text:
+          multiline: true
+      default: |
+        Only if light supports color (check supported_color_modes):
+        - "color_name": "red", "blue", "warm_white"
+        - "rgb_color": "[255,0,0]" (list format)
+        - "color_temp_kelvin": 2700-6500
+        Skip if unsupported.
 
-        transition_prompt:
-          name: Transition Prompt
-          selector:
-            text:
-              multiline: true
-          default: |
-            "transition": seconds (0.5, 1, 3, 5). Use for smooth changes.
+    transition_prompt:
+      name: Transition Prompt
+      selector:
+        text:
+          multiline: true
+      default: |
+        "transition": seconds (0.5, 1, 3, 5). Use for smooth changes.
 
     additional_actions:
       name: Additional actions
