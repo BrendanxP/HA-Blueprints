@@ -22,7 +22,7 @@ blueprint:
     ## Available variables for additional actions
     |Variable|Description|
     |---|---|
-    |`target`|Raw target from voice request|
+    |`target`|What LLM resolved target to (e.g. <light_id>, <area_id>, "upstairs", "house")|
     |`action`|The action: turn_on, turn_off, toggle, dim, brighten|
     |`target_data`|Clean target dict (entity_id OR floor_id OR area_id only)|
     |`clean_target`|Final service target used|
@@ -62,19 +62,45 @@ blueprint:
             - "brighten" - increase brightness (use brightness_pct: 70-100)
             For "dim the lights" use action: "dim", brightness_pct: 50. For "make brighter" use "brighten", brightness_pct: 80.
 
-        target_prompt:
-          name: Target Prompt
-          description: Prompt for target resolution
-          selector:
-            text:
-              multiline: true
-          default: |
-            Pick ONE target type from exposed entities (PRIORITY ORDER):
-            1. SPECIFIC ENTITY: "ceiling light living room" → light.ceiling_living (fuzzy friendly_name match)
-            2. FLOOR: "upstairs", "downstairs" → floor.upstairs  
-            3. AREA: "living room", "bedroom" → area.living_room
-            4. ALL: "everywhere", "whole house" → all floors
-            **CRITICAL**: NEVER mix types. "ceiling light in living room" = ENTITY (not area!). Never use empty string.
+    target_prompt:
+      name: Target Prompt
+      description: Prompt for target resolution
+      selector:
+        text:
+          multiline: true
+      default: |
+        You receive:
+        - The full list of available light entities with their `entity_id` and `friendly_name`.
+        - The list of valid `area_id` and `floor_id` values for this specific house.
+    
+        Your job is to:
+        1. Select EXACTLY ONE target type:
+           - SPECIFIC ENTITY: choose when the user refers to a specific light or group.
+           - AREA: when the user mentions a room/area.
+           - FLOOR: when the user mentions a whole floor.
+           - ALL: "everywhere", "whole house" → all floors.
+    
+        2. You MUST only use names that exist in the provided lists:
+           - Never invent or normalize room names.
+           - Example: if the only area is "living" (area_id: living), **never** use "living room".
+           - If there is an area "living_room" and aliases "living", "sitting area", you **must** map
+             all of these back to `living_room`.
+
+        3. Priority order:
+           1. SPECIFIC ENTITY (best match in friendly_name).
+           2. AREA (valid area_id only).
+           3. FLOOR (valid floor_id only).
+           4. ALL (special keywords only).
+    
+        4. Rules:
+           - NEVER mix types. "ceiling light in <room>" = ENTITY, not area.
+           - If the user says something that does not match any known entity/area/floor, return an empty target.
+           - Never output partial or guessed area names; always exactly match an existing `area_id` or entity name.
+
+        Examples:
+           - "turn off <area>" → target: "<aream>"
+           - "dim upstairs" → target: "upstairs"
+           - "make <light> in <area> red" → target: "<light>"
 
         brightness_prompt:
           name: Brightness Prompt
@@ -220,8 +246,8 @@ sequence:
       
       target_data:
         entity_id: "{{ entity_match if entity_match else 'NA' }}"
-        area_id: "{{ [raw_target] if is_area and not is_floor else 'NA' }}"
-        floor_id: "{{ [raw_target] if is_floor else 'NA' }}"
+        area_id: "{{ [raw_target] if is_area and not entity_match else 'NA' }}"
+        floor_id: "{{ [raw_target] if is_floor and not entity_match and not is_area else 'NA' }}"
       
       service_name: >
         {% if raw_action in ['dim', 'brighten'] %} light.turn_on
@@ -230,10 +256,10 @@ sequence:
       clean_target: >
         {% if target_data.entity_id != 'NA' %}
           {"entity_id": {{ target_data.entity_id }}}
-        {% elif target_data.floor_id != 'NA' %}
-          {"floor_id": {{ target_data.floor_id }}}
         {% elif target_data.area_id != 'NA' %}
           {"area_id": {{ target_data.area_id }}}
+        {% elif target_data.floor_id != 'NA' %}
+          {"floor_id": {{ target_data.floor_id }}}          
         {% elif raw_target in ['all', 'everywhere', 'house', 'whole house'] %}
           {"floor_id": ["upstairs", "downstairs"]}
         {% else %}
